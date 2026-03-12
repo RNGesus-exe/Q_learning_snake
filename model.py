@@ -5,6 +5,8 @@ from logging.handlers import RotatingFileHandler
 
 import numpy as np
 
+from client import send_seed
+
 # -----------------------------
 # Logging
 # -----------------------------
@@ -34,9 +36,9 @@ action_queue: queue.Queue[str]  = queue.Queue()
 # -----------------------------
 ACTIONS = ["up", "down", "left", "right"]
 
-EMPTY = 0 
-SNAKE = 1 
-FRUIT = 2 
+EMPTY    = 0 
+SNAKE    = 1 
+FRUIT    = 2 
 OBSTACLE = 3
 
 # -----------------------------
@@ -64,29 +66,10 @@ def get_q_value(state: tuple) -> np.ndarray:
         q_table[state] = np.zeros(len(ACTIONS))
     return q_table[state]
 
-# TODO: ENV will send snake and fruit coords instead of searching for here
+# Extract (snake, fruit) coords
 def extract_state(game_state: dict) -> tuple:
-    """
-    Extracts a compact, hashable state tuple from the raw game state.
-    Scans the grid to find snake head (1) and fruit (2) positions.
-
-    State: (snake_x, snake_y, fruit_x, fruit_y)
-    """
-    grid = game_state["state"]
-
-    snake_x = snake_y = fruit_x = fruit_y = None
-
-    for row_idx, row in enumerate(grid):
-        for col_idx, cell in enumerate(row):
-            if cell == SNAKE:
-                snake_x, snake_y = col_idx, row_idx
-            elif cell == FRUIT:
-                fruit_x, fruit_y = col_idx, row_idx
-
-    if snake_x is None:
-        raise ValueError("Snake not found in grid")
-    if fruit_x is None:
-        raise ValueError("Fruit not found in grid")
+    snake_x, snake_y = game_state["snakeBody"][0]["x"], game_state["snakeBody"][0]["y"]
+    fruit_x, fruit_y = game_state["fruitPosition"][0]["x"], game_state["fruitPosition"][0]["y"]
 
     state = (snake_x, snake_y, fruit_x, fruit_y)
 
@@ -140,10 +123,11 @@ def training_loop():
 
     logger.info("Training loop started — waiting for first game state...")
 
-    # Step 1: Send seed
-    # send_seed()
-
     while True:
+
+        # Step 1: Send seed
+        if episode == 0:
+            send_seed(grid=[20, 20])
 
         raw_state: dict = state_queue.get() # Blocking Call (s', r)
 
