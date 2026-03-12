@@ -1,0 +1,32 @@
+import threading
+import logging
+import uvicorn
+
+from model import training_loop, action_queue
+from client import client_loop
+
+logger = logging.getLogger(__name__)
+
+if __name__ == "__main__":
+
+   
+    # Start client thread
+    client_thread = threading.Thread(
+        target=client_loop,
+        daemon=True,
+        name="ClientThread",
+    )
+    client_thread.start()
+    logger.info("Client thread started")
+ # Start server thread
+    server_thread = threading.Thread(
+        target=uvicorn.run,
+        kwargs={"app": "server:app", "host": "0.0.0.0", "port": 13000, "log_level": "info"},
+        daemon=True,
+        name="ServerThread",
+    )
+    server_thread.start()
+    logger.info("Server thread started")
+
+    # Training loop runs on the main process (blocks here)
+    training_loop()
