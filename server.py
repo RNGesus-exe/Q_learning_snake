@@ -5,11 +5,11 @@ from typing import List, Tuple
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-from model import state_queue
+from queues import state_queue
 
 # Logging
 file_handler = RotatingFileHandler(
-    "server.log",
+    "logs/server.log",
     maxBytes=10 * 1024 * 1024,  # 10 MB
     backupCount=5,
 )

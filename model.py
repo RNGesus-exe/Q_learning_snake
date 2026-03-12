@@ -5,7 +5,8 @@ from logging.handlers import RotatingFileHandler
 
 import numpy as np
 
-from client import send_seed
+from client import send_seed, wait_for_env
+from queues import state_queue, action_queue
 
 # -----------------------------
 # Logging
@@ -14,7 +15,7 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(threadName)s | %(message)s",
     handlers=[
-        RotatingFileHandler("model.log", maxBytes=10 * 1024 * 1024, backupCount=5),
+        RotatingFileHandler("logs/model.log", maxBytes=10 * 1024 * 1024, backupCount=5),
         logging.StreamHandler(),
     ],
 )
@@ -23,18 +24,9 @@ logger = logging.getLogger(__name__)
 
 
 # -----------------------------
-# Shared queues
-# state_queue  : game state dicts pushed by server.py, consumed by training loop
-# action_queue : actions pushed by training loop, consumed by client.py
-# -----------------------------
-state_queue:  queue.Queue[dict] = queue.Queue()
-action_queue: queue.Queue[str]  = queue.Queue()
-
-
-# -----------------------------
 # Constants
 # -----------------------------
-ACTIONS = ["up", "down", "left", "right"]
+ACTIONS = ["UP", "DOWN", "LEFT", "RIGHT"]
 
 EMPTY    = 0 
 SNAKE    = 1 
@@ -69,7 +61,7 @@ def get_q_value(state: tuple) -> np.ndarray:
 # Extract (snake, fruit) coords
 def extract_state(game_state: dict) -> tuple:
     snake_x, snake_y = game_state["snakeBody"][0]["x"], game_state["snakeBody"][0]["y"]
-    fruit_x, fruit_y = game_state["fruitPosition"][0]["x"], game_state["fruitPosition"][0]["y"]
+    fruit_x, fruit_y = game_state["fruitPosition"]["x"], game_state["fruitPosition"]["y"]
 
     state = (snake_x, snake_y, fruit_x, fruit_y)
 
@@ -120,6 +112,9 @@ def training_loop():
     episode  = 0
     step     = 0
     prev_raw = None # prev state (s)
+
+    # Wait until env is up
+    wait_for_env()
 
     logger.info("Training loop started — waiting for first game state...")
 

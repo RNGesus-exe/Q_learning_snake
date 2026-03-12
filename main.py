@@ -1,3 +1,4 @@
+import os
 import threading
 import logging
 import uvicorn
@@ -8,6 +9,8 @@ from client import client_loop
 logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
+
+    os.makedirs("logs", exist_ok=True)
 
     # Start client thread
     client_thread = threading.Thread(
@@ -21,7 +24,7 @@ if __name__ == "__main__":
     # Start server thread
     server_thread = threading.Thread(
         target=uvicorn.run,
-        kwargs={"app": "server:app", "host": "0.0.0.0", "port": 13000, "log_level": "info"},
+        kwargs={"app": "server:app", "host": "0.0.0.0", "port": 14000, "log_level": "info"},
         daemon=True,
         name="ServerThread",
     )
