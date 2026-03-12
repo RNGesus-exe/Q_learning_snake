@@ -1,4 +1,5 @@
 import os
+import shutil
 import threading
 import logging
 import uvicorn
@@ -10,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
 
+    shutil.rmtree("logs")
     os.makedirs("logs", exist_ok=True)
 
     # Start client thread

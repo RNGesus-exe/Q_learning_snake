@@ -8,19 +8,15 @@ from pydantic import BaseModel
 from queues import state_queue
 
 # Logging
-file_handler = RotatingFileHandler(
-    "logs/server.log",
-    maxBytes=10 * 1024 * 1024,  # 10 MB
-    backupCount=5,
-)
+logger = logging.getLogger("server")
+logger.setLevel(logging.INFO)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(threadName)s | %(message)s",
-    handlers=[file_handler, logging.StreamHandler()],
-)
+formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(threadName)s | %(message)s")
 
-logger = logging.getLogger(__name__)
+file_handler = RotatingFileHandler("logs/server.log", maxBytes=10 * 1024 * 1024, backupCount=5)
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
 
 app = FastAPI()
 

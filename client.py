@@ -6,27 +6,28 @@ import requests
 
 from queues import action_queue
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(threadName)s | %(message)s",
-    handlers=[
-        RotatingFileHandler("logs/client.log", maxBytes=10 * 1024 * 1024, backupCount=5),
-        logging.StreamHandler(),
-    ],
-)
+logger = logging.getLogger("client")
+logger.setLevel(logging.INFO)
 
-logger = logging.getLogger(__name__)
+formatter = logging.Formatter("%(asctime)s | %(levelname)s | %(threadName)s | %(message)s")
 
-GAME_SERVER_URL = "https://9e88-154-208-61-202.ngrok-free.app/"
+file_handler = RotatingFileHandler("logs/client.log", maxBytes=10 * 1024 * 1024, backupCount=5)
+file_handler.setFormatter(formatter)
+
+logger.addHandler(file_handler)
+
+
+GAME_SERVER_URL = "https://08d8-154-208-61-202.ngrok-free.app/"
 
 #TODO: /start-recording
 
 def wait_for_env(interval: float = 1.0):
     logger.info("Waiting for env to be ready...")
+    logger.info(f"Checking health: {GAME_SERVER_URL}health")
 
     while True:
         try:
-            resp = requests.get(f"{GAME_SERVER_URL}/health", timeout=2)
+            resp = requests.get(f"{GAME_SERVER_URL}health", timeout=5)
             if resp.status_code == 200 and resp.json().get("status") == "ok":
                 logger.info("Env is ready.")
                 return
@@ -52,11 +53,8 @@ def send_seed(
         payload["fruit"] = fruit
     
     try:
-        resp = requests.post(
-            f"{GAME_SERVER_URL}/seed",
-            json=payload,
-            timeout=2
-        )
+        logger.info(f"Sending seed: {GAME_SERVER_URL}seed")
+        resp = requests.post(f"{GAME_SERVER_URL}seed", json=payload, timeout=2)
         resp.raise_for_status()
         logger.info(f"Seed sent — payload: {payload} | response: {resp.status_code}")
 
@@ -71,11 +69,8 @@ def client_loop():
         action = action_queue.get()
 
         try:
-            resp = requests.post(
-                f"{GAME_SERVER_URL}/perform_action",
-                json={"action": action},
-                timeout=2,
-            )
+            logger.info(f"Sending action: {GAME_SERVER_URL}perform_action")
+            resp = requests.post(f"{GAME_SERVER_URL}perform_action", json={"action": action}, timeout=2)
             resp.raise_for_status()
             logger.debug(f"Action '{action}' sent — response: {resp.status_code}")
 
