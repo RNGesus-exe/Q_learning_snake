@@ -198,10 +198,8 @@ def training_loop():
 
             if episode % 100 == 0:
                 save_q_table()
-                q_table = load_q_table("models/q_table.pkl")
-                print(f"Loaded Q-table: {len(q_table)} states")
-                export_csv(q_table, f"models/q_table_{episode}.csv")
-                plot_heatmaps(q_table, f"models/q_heatmap_{episode}.csv")
+                export_csv(q_table, f"images/q_table_{episode}.csv")
+                plot_heatmaps(q_table, f"images/q_heatmap_{episode}.png")
             
             # Stop training if maximum episodes reached
             if episode >= MAX_EPISODES:
