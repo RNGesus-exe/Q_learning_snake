@@ -1,4 +1,5 @@
 import os
+import pickle
 import random
 import logging
 from logging.handlers import RotatingFileHandler
@@ -7,6 +8,8 @@ import numpy as np
 
 from client import send_seed, wait_for_env
 from queues import state_queue, action_queue
+
+from visualize import load_q_table, plot_heatmaps, export_csv
 
 # -----------------------------
 # Logging
@@ -42,8 +45,8 @@ EPSILON_MIN   = 0.01   # minimum exploration rate
 EPSILON_DECAY = 0.995  # multiplicative decay per episode
 MAX_EPISODES  = 10_000 # maximum episodes to train agent 
 
-GRID_HEIGHT = 5
-GRID_WIDTH = 5
+GRID_HEIGHT = 10
+GRID_WIDTH = 10
 LOG_EVERY_N_EPISODES = 10
 
 # Rewards (kept as reference, actual rewards come from env)
@@ -54,6 +57,13 @@ LOG_EVERY_N_EPISODES = 10
 # Keyed by (snake_x, snake_y, fruit_x, fruit_y) → np.array of 4 Q-values
 # -----------------------------
 q_table: dict[tuple, np.ndarray] = {}
+
+def save_q_table(path: str = "models/q_table.pkl"):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "wb") as f:
+        pickle.dump(q_table, f)
+    logger.info(f"Q-table saved to {path} ({len(q_table)} states)")
+
 
 # Returns Q-values for a state, initialising to zeros if unseen
 def get_q_value(state: tuple) -> np.ndarray:
@@ -68,7 +78,7 @@ def extract_state(game_state: dict) -> tuple:
 
     state = (snake_x, snake_y)
 
-    logger.info(f"State — snake: ({snake_x},{snake_y})")
+    logger.debug(f"State — snake: ({snake_x},{snake_y})")
 
     return state
 
@@ -78,13 +88,13 @@ def choose_action(state: tuple, epsilon: float) -> str:
     # Exploration if less than epsilon 
     if random.random() < epsilon:
         action = random.choice(ACTIONS)
-        logger.info(f"Action: {action} (explore | ε={epsilon:.3f})")
+        logger.debug(f"Action: {action} (explore | ε={epsilon:.3f})")
     # TODO: Use softmax -> np.random.choice()
     # Exploitation if greater than epsilon
     else:
         q_vals = get_q_value(state)
         action = ACTIONS[int(np.argmax(q_vals))]
-        logger.info(f"Action: {action} (exploit | ε={epsilon:.3f} | Q={q_vals})")
+        logger.debug(f"Action: {action} (exploit | ε={epsilon:.3f} | Q={q_vals})")
 
     return action
 
@@ -101,7 +111,7 @@ def update_q(state: tuple, action: str, reward: float, next_state: tuple):
     # Q'
     q_current[a_idx] = q_current[a_idx] + ALPHA * (reward + GAMMA * np.max(q_next) - q_current[a_idx])
 
-    logger.info(
+    logger.debug(
         f"Q-update — state: {state} | action: {action} | "
         f"reward: {reward:.2f} | new Q: {q_current}"
     )
@@ -123,9 +133,15 @@ def training_loop():
 
     while True:
 
-        # Step 1: Send seed (Fruit will be constant)
+        # Step 1: Send seed (Fruit is constant, snake position is randomised)
         if step == 0:
-            send_seed(grid=[GRID_HEIGHT, GRID_WIDTH], fruit=[2,2])
+            fruit = [4, 4]
+            # TODO: @Abdullah has bug where snake and fruit spawn on same time and fruit gets displaced 
+            snake = [random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1)]
+            if snake == fruit:
+                snake[0] = (snake[0] + 1) % GRID_WIDTH
+
+            send_seed(grid=[GRID_HEIGHT, GRID_WIDTH], snake=snake, fruit=fruit)
 
         raw_state: dict = state_queue.get() # Blocking Call (s', r)
 
@@ -153,7 +169,7 @@ def training_loop():
         next_state = extract_state(raw_state)       # (s')
         reward     = raw_state["reward"]            # (r) NOTE: We get previous action reward
 
-        logger.info(f"Reward from env: {reward}")
+        logger.debug(f"Reward from env: {reward}")
 
         # Step 4: Update Q-table(s, a, r, s')
         update_q(state, action, reward, next_state)
@@ -166,8 +182,6 @@ def training_loop():
             
             # Next Episode
             episode += 1
-
-            print(f"Episode {episode}")
 
             logger.info(
                 f"Episode {episode} ended — "
@@ -182,10 +196,16 @@ def training_loop():
             prev_raw = None     # (s)
             action   = None     # (a)
 
-            # TODO: Log Q-Table after every 100 episodes (heatmap)
+            if episode % 100 == 0:
+                save_q_table()
+                q_table = load_q_table("models/q_table.pkl")
+                print(f"Loaded Q-table: {len(q_table)} states")
+                export_csv(q_table, f"models/q_table_{episode}.csv")
+                plot_heatmaps(q_table, f"models/q_heatmap_{episode}.csv")
             
             # Stop training if maximum episodes reached
             if episode >= MAX_EPISODES:
+                save_q_table()
                 # TODO: Send stop signal to env
                 logger.info(f"Training complete — episodes: {episode} | ε: {epsilon:.4f}")
                 break

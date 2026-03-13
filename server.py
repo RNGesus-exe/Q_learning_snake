@@ -50,7 +50,7 @@ def update_state(req: UpdateStateRequest):
     head = req.snakeBody[0]
 
     # Log the received game state
-    logger.info(
+    logger.debug(
         f"/update_state — grid: {len(req.grid)}x{len(req.grid)} | "
         f"snake: ({head.x},{head.y}) | "
         f"fruit: ({req.fruitPosition.x}, {req.fruitPosition.y}) | "
@@ -63,7 +63,7 @@ def update_state(req: UpdateStateRequest):
     state_queue.put(req.model_dump())
 
     # Log current size of queue
-    logger.info(f"State pushed to queue — queue size: {state_queue.qsize()}")
+    logger.debug(f"State pushed to queue — queue size: {state_queue.qsize()}")
 
     # Log if game is over
     if req.gameOver:

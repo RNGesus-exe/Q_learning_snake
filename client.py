@@ -17,7 +17,7 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 
-GAME_SERVER_URL = "https://08d8-154-208-61-202.ngrok-free.app/"
+GAME_SERVER_URL = "https://a018-154-208-61-202.ngrok-free.app/"
 
 #TODO: /start-recording
 
