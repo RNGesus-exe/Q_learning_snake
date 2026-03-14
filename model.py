@@ -197,13 +197,13 @@ def training_loop():
             action   = None     # (a)
 
             if episode % 100 == 0:
-                save_q_table()
+                save_q_table(f"models/q_table_{episode}.pkl")
                 export_csv(q_table, f"images/q_table_{episode}.csv")
                 plot_heatmaps(q_table, f"images/q_heatmap_{episode}.png")
             
             # Stop training if maximum episodes reached
             if episode >= MAX_EPISODES:
-                save_q_table()
+                save_q_table(f"models/q_table_{episode}.pkl")
                 # TODO: Send stop signal to env
                 logger.info(f"Training complete — episodes: {episode} | ε: {epsilon:.4f}")
                 break
