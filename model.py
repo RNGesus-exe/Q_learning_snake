@@ -83,8 +83,7 @@ def extract_state(game_state: dict) -> tuple:
 
 # ε - greedy policy
 def choose_action(state: tuple, epsilon: float) -> str:
-    
-    # TODO: Optimize epsilon decay (distribute over max_episodes)
+
     # Exploration if less than epsilon 
     if random.random() < epsilon:
         action = random.choice(ACTIONS)
@@ -93,8 +92,11 @@ def choose_action(state: tuple, epsilon: float) -> str:
     # Exploitation if greater than epsilon
     else:
         q_vals = get_q_value(state)
-        action = ACTIONS[int(np.argmax(q_vals))]
-        logger.debug(f"Action: {action} (exploit | ε={epsilon:.3f} | Q={q_vals})")
+        # Softmax to convert Q-values into a probability distribution
+        exp_q = np.exp(q_vals - np.max(q_vals))     # subtract max for numerical stability
+        probs = exp_q / exp_q.sum()
+        action = np.random.choice(ACTIONS, p=probs)
+        logger.debug(f"Action: {action} (exploit | epsilon={epsilon:.3f} | Q={q_vals})")
 
     return action
 
@@ -177,8 +179,10 @@ def training_loop():
         # Step 5: Check if game over and move to next episode
         if raw_state["gameOver"]:
             
+            # TODO: Optimize epsilon decay (distribute over max_episodes)
             # Update epsilon at the end of each episode
-            epsilon = max(EPSILON_MIN, epsilon * EPSILON_DECAY)
+            epsilon = max(EPSILON_MIN, EPSILON_START - (EPSILON_START - EPSILON_MIN) * (episode / MAX_EPISODES))
+            # epsilon = max(EPSILON_MIN, epsilon * EPSILON_DECAY) ** (1 / MAX_EPISODES)
             
             # Next Episode
             episode += 1
@@ -196,7 +200,7 @@ def training_loop():
             prev_raw = None     # (s)
             action   = None     # (a)
 
-            if episode % 100 == 0:
+            if episode % 500 == 0:
                 save_q_table(f"models/q_table_{episode}.pkl")
                 export_csv(q_table, f"images/q_table_{episode}.csv")
                 plot_heatmaps(q_table, f"images/q_heatmap_{episode}.png")
