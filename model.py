@@ -9,7 +9,7 @@ import numpy as np
 from client import send_seed, wait_for_env
 from queues import state_queue, action_queue
 
-from visualize import load_q_table, plot_heatmaps, export_csv
+from visualize import plot_heatmaps, export_csv
 
 # -----------------------------
 # Logging
@@ -65,7 +65,7 @@ def save_q_table(path: str = "models/q_table.pkl"):
     logger.info(f"Q-table saved to {path} ({len(q_table)} states)")
 
 
-# Returns Q-values for a state, initialising to zeros if unseen
+# Returns Q-values for a state, initializing to zeros if unseen
 def get_q_value(state: tuple) -> np.ndarray:
     if state not in q_table:
         q_table[state] = np.zeros(len(ACTIONS))
@@ -74,21 +74,21 @@ def get_q_value(state: tuple) -> np.ndarray:
 # Extract (snake, fruit) coords
 def extract_state(game_state: dict) -> tuple:
     snake_x, snake_y = game_state["snakeBody"][0]["x"], game_state["snakeBody"][0]["y"]
-    fruit_x, fruit_y = game_state["fruitPosition"]["x"], game_state["fruitPosition"]["y"]
 
     state = (snake_x, snake_y)
 
-    logger.debug(f"State — snake: ({snake_x},{snake_y})")
+    logger.debug(f"State - snake: ({snake_x},{snake_y})")
 
     return state
 
 # ε - greedy policy
 def choose_action(state: tuple, epsilon: float) -> str:
     
+    # TODO: Optimize epsilon decay (distribute over max_episodes)
     # Exploration if less than epsilon 
     if random.random() < epsilon:
         action = random.choice(ACTIONS)
-        logger.debug(f"Action: {action} (explore | ε={epsilon:.3f})")
+        logger.debug(f"Action: {action} (explore | epsilon={epsilon:.3f})")
     # TODO: Use softmax -> np.random.choice()
     # Exploitation if greater than epsilon
     else:
@@ -112,7 +112,7 @@ def update_q(state: tuple, action: str, reward: float, next_state: tuple):
     q_current[a_idx] = q_current[a_idx] + ALPHA * (reward + GAMMA * np.max(q_next) - q_current[a_idx])
 
     logger.debug(
-        f"Q-update — state: {state} | action: {action} | "
+        f"Q-update - state: {state} | action: {action} | "
         f"reward: {reward:.2f} | new Q: {q_current}"
     )
 
@@ -129,11 +129,11 @@ def training_loop():
     # Wait until env is up
     wait_for_env()
 
-    logger.info("Training loop started — waiting for first game state...")
+    logger.info("Training loop started - waiting for first game state...")
 
     while True:
 
-        # Step 1: Send seed (Fruit is constant, snake position is randomised)
+        # Step 1: Send seed (Fruit is constant, snake position is randomized)
         if step == 0:
             fruit = [4, 4]
             # TODO: @Abdullah has bug where snake and fruit spawn on same time and fruit gets displaced 
@@ -150,7 +150,7 @@ def training_loop():
 
         # Step 2: If no (s) in memory then it's the first step of the an episode
         if prev_raw is None:
-            logger.info(f"Episode {episode} — Received new (state, reward) | seed: {raw_state.get('seed', 'N/A')}")
+            logger.info(f"Episode {episode} - Received new (state, reward) | seed: {raw_state.get('seed', 'N/A')}")
             
             # Get new state (s') 
             state = extract_state(raw_state)
@@ -184,10 +184,10 @@ def training_loop():
             episode += 1
 
             logger.info(
-                f"Episode {episode} ended — "
+                f"Episode {episode} ended - "
                 f"steps: {step} | "
                 f"score: {raw_state['score']} | "
-                f"ε: {epsilon:.4f} | "
+                f"epsilon: {epsilon:.4f} | "
                 f"Q-table size: {len(q_table)}"
             )
 
@@ -205,7 +205,7 @@ def training_loop():
             if episode >= MAX_EPISODES:
                 save_q_table(f"models/q_table_{episode}.pkl")
                 # TODO: Send stop signal to env
-                logger.info(f"Training complete — episodes: {episode} | ε: {epsilon:.4f}")
+                logger.info(f"Training complete - episodes: {episode} | epsilon: {epsilon:.4f}")
                 break
         
         # Step 6: If game not over then choose next action and send to env

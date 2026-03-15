@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 if __name__ == "__main__":
 
-    shutil.rmtree("logs")
+    # shutil.rmtree("logs")
     os.makedirs("logs", exist_ok=True)
 
     # Start client thread

@@ -17,7 +17,7 @@ file_handler.setFormatter(formatter)
 logger.addHandler(file_handler)
 
 
-GAME_SERVER_URL = "https://a018-154-208-61-202.ngrok-free.app/"
+GAME_SERVER_URL = "http://localhost:13000/"
 
 #TODO: /start-recording
 
@@ -27,14 +27,14 @@ def wait_for_env(interval: float = 1.0):
 
     while True:
         try:
-            resp = requests.get(f"{GAME_SERVER_URL}health", timeout=5)
+            resp = requests.get(f"{GAME_SERVER_URL}health", timeout=10)
             if resp.status_code == 200 and resp.json().get("status") == "ok":
                 logger.info("Env is ready.")
                 return
         except requests.RequestException:
             pass
 
-        logger.debug(f"Env not ready — retrying in {interval}s")
+        logger.debug(f"Env not ready - retrying in {interval}s")
         time.sleep(interval)
 
 def send_seed(
@@ -54,25 +54,25 @@ def send_seed(
     
     try:
         logger.info(f"Sending seed: {GAME_SERVER_URL}seed")
-        resp = requests.post(f"{GAME_SERVER_URL}seed", json=payload, timeout=2)
+        resp = requests.post(f"{GAME_SERVER_URL}seed", json=payload, timeout=10)
         resp.raise_for_status()
-        logger.info(f"Seed sent — payload: {payload} | response: {resp.status_code}")
+        logger.info(f"Seed sent - payload: {payload} | response: {resp.status_code}")
 
     except requests.RequestException as e:
         logger.error(f"Failed to send seed: {e}")
 
 
 def client_loop():
-    logger.info("Client loop started — waiting for actions...")
+    logger.info("Client loop started - waiting for actions...")
 
     while True:
         action = action_queue.get()
 
         try:
             logger.info(f"Sending action: {GAME_SERVER_URL}perform_action")
-            resp = requests.post(f"{GAME_SERVER_URL}perform_action", json={"action": action}, timeout=2)
+            resp = requests.post(f"{GAME_SERVER_URL}perform_action", json={"action": action}, timeout=10)
             resp.raise_for_status()
-            logger.debug(f"Action '{action}' sent — response: {resp.status_code}")
+            logger.debug(f"Action '{action}' sent - response: {resp.status_code}")
 
         except requests.RequestException as e:
             logger.error(f"Failed to send action '{action}': {e}")
