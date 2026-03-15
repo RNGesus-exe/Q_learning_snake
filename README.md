@@ -28,7 +28,7 @@ $$Q(s, a) \leftarrow Q(s, a) + \alpha \Big[ r + \gamma \max_{a'} Q(s', a') - Q(s
 
 **Exploration** — ε-greedy with linear decay across all 10,000 episodes:
 
-$$\varepsilon = \max\Big(\varepsilon_{\min},\ \varepsilon_{\text{start}} - (\varepsilon_{\text{start}} - \varepsilon_{\min}) \cdot \frac{\text{episode}}{\text{max\_episodes}}\Big)$$
+$$\varepsilon = \max\Big(\varepsilon_{\min},\ \varepsilon_{\text{start}} - (\varepsilon_{\text{start}} - \varepsilon_{\min}) \cdot \frac{\text{episode}}{\text{maxEpisodes}}\Big)$$
 
 **Exploitation** — softmax over Q-values rather than pure argmax:
 
