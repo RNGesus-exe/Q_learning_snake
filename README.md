@@ -1,4 +1,4 @@
-# Q-Learning Snake 🐍
+# Vanilla Q-Learning Snake 🐍
 
 Tabular Q-Learning agent that learns to navigate a 10×10 grid toward a fixed fruit while avoiding collisions.
 
