@@ -26,7 +26,7 @@ if __name__ == "__main__":
     # Start server thread
     server_thread = threading.Thread(
         target=uvicorn.run,
-        kwargs={"app": "server:app", "host": "0.0.0.0", "port": 14000, "log_level": "info"},
+        kwargs={"app": "server:app", "host": "0.0.0.0", "port": 14000, "access_log":False},
         daemon=True,
         name="ServerThread",
     )

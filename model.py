@@ -9,6 +9,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import wandb
 
 from client import send_seed, wait_for_env
 from queues import state_queue, action_queue
@@ -36,15 +37,15 @@ SNAKE    = 1
 FRUIT    = 2 
 OBSTACLE = 3
 
-GRID_HEIGHT = 20
-GRID_WIDTH = 20
+GRID_HEIGHT = 10
+GRID_WIDTH = 10
 
 LOG_EVERY_N_EPISODES = 10
 
 # -----------------------------
 # Hyperparameters
 # -----------------------------
-GAMMA         = 0.9    # discount factor
+GAMMA         = 0.7    # discount factor
 EPSILON_START = 1.0    # initial exploration rate
 EPSILON_MIN   = 0.01   # minimum exploration rate
 MAX_EPISODES  = 10_000 # maximum episodes to train agent 
@@ -56,7 +57,7 @@ BUFFER_CAPACITY   = 10_000  # max transitions stored in replay buffer
 MIN_BUFFER_SIZE   = 1_000   # don't train until buffer reaches this size
 TARGET_SYNC_EVERY = 100     # copy online → target every N steps
 
-STATE_DIM  = 8              # length of feature vector from extract_state()
+STATE_DIM  = 4              # length of feature vector from extract_state()
 ACTION_DIM = len(ACTIONS)   # 4
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -95,23 +96,11 @@ def extract_state(game_state: dict) -> np.ndarray:
     sx, sy = head["x"], head["y"]
     fx, fy = game_state["fruitPosition"]["x"], game_state["fruitPosition"]["y"]
 
-    dx = fx - sx
-    dy = fy - sy
-
-    snake_len     = len(game_state["snakeBody"])
-    
-    # How far into the episode we are
-    step_fraction = game_state.get("step", 0) / (GRID_WIDTH * GRID_HEIGHT)
-
     state = np.array([
         sx / (GRID_WIDTH  - 1),
         sy / (GRID_HEIGHT - 1),
         fx / (GRID_WIDTH  - 1),
         fy / (GRID_HEIGHT - 1),
-        dx / (GRID_WIDTH  - 1),
-        dy / (GRID_HEIGHT - 1),
-        snake_len / (GRID_WIDTH * GRID_HEIGHT),
-        min(step_fraction, 1.0),
     ], dtype=np.float32)
 
     logger.debug(f"State vector: {state}")
@@ -141,7 +130,7 @@ def choose_action(state: np.ndarray, epsilon: float) -> tuple[str, int]:
     # Exploration if less than epsilon 
     if random.random() < epsilon:
         idx = random.randrange(ACTION_DIM)
-        logger.debug(f"Action: {ACTIONS[idx]} (explore | ε={epsilon:.3f})")
+        logger.debug(f"Action: {ACTIONS[idx]} (explore | epsilon={epsilon:.3f})")
     # Exploitation if greater than epsilon
     else:
         state_t = torch.tensor(state, dtype=torch.float32).unsqueeze(0).to(DEVICE)
@@ -153,7 +142,7 @@ def choose_action(state: np.ndarray, epsilon: float) -> tuple[str, int]:
         probs = exp_q / exp_q.sum()
         # Sampling
         idx   = np.random.choice(ACTION_DIM, p=probs)
-        logger.debug(f"Action: {ACTIONS[idx]} (exploit | ε={epsilon:.3f} | Q={q_vals} | probs={probs}| idx={idx})")
+        logger.debug(f"Action: {ACTIONS[idx]} (exploit | epsilon={epsilon:.3f} | Q={q_vals} | probs={probs}| idx={idx})")
 
     return ACTIONS[idx], idx
 
@@ -164,7 +153,7 @@ def choose_action(state: np.ndarray, epsilon: float) -> tuple[str, int]:
 def optimize_model() -> float | None:
     """
     Bellman target:
-      y = r                          (if terminal)
+      y = r                             (if terminal)
       y = r + gamma * max_a Q̂(s', a)    (if not terminal)   ← uses frozen target_net
 
     Loss:
@@ -217,7 +206,7 @@ def save_checkpoint(episode: int, epsilon: float, path: str = "models/dqn.pt"):
         "target_state_dict": target_net.state_dict(),
         "optimizer_state":   optimizer.state_dict(),
     }, path)
-    logger.info(f"Checkpoint saved → {path} (episode {episode})")
+    logger.info(f"Checkpoint saved to {path} (episode {episode})")
 
 def load_checkpoint(path: str = "models/dqn.pt") -> tuple[int, float]:
     """Returns (episode, epsilon) so training_loop can resume correctly."""
@@ -229,9 +218,42 @@ def load_checkpoint(path: str = "models/dqn.pt") -> tuple[int, float]:
     return checkpoint["episode"], checkpoint["epsilon"]
 
 # -----------------------------
+# WANDB
+# -----------------------------
+def init_wandb():
+    wandb.init(
+        project="snake-dqn",
+        config={
+            "gamma":             GAMMA,
+            "epsilon_start":     EPSILON_START,
+            "epsilon_min":       EPSILON_MIN,
+            "max_episodes":      MAX_EPISODES,
+            "learning_rate":     LEARNING_RATE,
+            "hidden_dim":        HIDDEN_DIM,
+            "batch_size":        BATCH_SIZE,
+            "buffer_capacity":   BUFFER_CAPACITY,
+            "min_buffer_size":   MIN_BUFFER_SIZE,
+            "target_sync_every": TARGET_SYNC_EVERY,
+            "state_dim":         STATE_DIM,
+            "grid":              f"{GRID_WIDTH}x{GRID_HEIGHT}",
+            "device":            str(DEVICE),
+        }
+    )
+
+    wandb.watch(online_net, log="all", log_freq=100)
+
+    wandb.define_metric("cum_step")
+    wandb.define_metric("step/*",    step_metric="cum_step")
+    wandb.define_metric("episode/*", step_metric="episode")
+
+# -----------------------------
 # Training loop
 # -----------------------------
 def training_loop():
+
+    # Initialize wandb for monitoring
+    init_wandb()
+
     epsilon  = EPSILON_START
     episode  = 0
     cum_step = 0        # global step counter (for target sync)
@@ -239,6 +261,10 @@ def training_loop():
     prev_raw = None     # raw prev state (s)
     state = None        # structured prev state (s)
     action_idx = None   # action (a)
+
+    # Per-episode accumulators
+    ep_losses: list[float] = []
+    ep_reward_sum: float   = 0.0
 
     # Wait until env is up
     wait_for_env()
@@ -248,12 +274,7 @@ def training_loop():
 
         # Step 1: Send seed (Fruit is constant, snake position is randomized)
         if ep_step == 0:
-            fruit = [4, 4]
-            # TODO: @Abdullah has bug where snake and fruit spawn on same time and fruit gets displaced 
-            snake = [random.randint(0, GRID_WIDTH - 1), random.randint(0, GRID_HEIGHT - 1)]
-            if snake == fruit:
-                snake[0] = (snake[0] + 1) % GRID_WIDTH
-            send_seed(grid=[GRID_HEIGHT, GRID_WIDTH], snake=snake, fruit=fruit)
+            send_seed(grid=[GRID_HEIGHT, GRID_WIDTH])
 
         raw_state: dict = state_queue.get() # Blocking Call (s', r)
         cum_step += 1
@@ -279,6 +300,7 @@ def training_loop():
         next_state = extract_state(raw_state)       # (s')
         reward     = raw_state["reward"]            # (r')
         done       = raw_state["gameOver"]          # done
+        ep_reward_sum += reward
 
         logger.debug(f"Reward: {reward:.3f} | done: {done}")
 
@@ -288,7 +310,13 @@ def training_loop():
         # Step 5: Train online network
         loss = optimize_model()
         if loss is not None:
-            logger.debug(f"Loss: {loss:.4f}")
+            ep_losses.append(loss)
+            wandb.log({
+                "step/loss":          loss,
+                "step/buffer_size":   len(replay_buffer),
+                "step/epsilon":       epsilon,
+                "cum_step":           cum_step,
+            })
         if cum_step % TARGET_SYNC_EVERY == 0:
             sync_target_network()
 
@@ -301,27 +329,44 @@ def training_loop():
             # Next Episode
             episode += 1
 
+            # Average loss at the end of each episode
+            avg_loss = float(np.mean(ep_losses)) if ep_losses else 0.0
+
             logger.info(
                 f"Episode {episode} ended | "
                 f"ep_steps: {ep_step} | "
+                f"total_eps: {cum_step} |"
                 f"score: {raw_state['score']} | "
                 f"epsilon: {epsilon:.4f} | "
                 f"buffer: {len(replay_buffer)} | "
                 f"loss: {loss:.4f}" if loss else "loss: N/A"
             )
 
+            wandb.log({
+                "episode/score":        raw_state["score"],
+                "episode/steps":        ep_step,
+                "episode/reward_sum":   ep_reward_sum,
+                "episode/avg_loss":     avg_loss,
+                "episode/epsilon":      epsilon,
+                "episode/buffer_size":  len(replay_buffer),
+                "episode":              episode,
+            })
+
             # reset for next episode 
             ep_step    = 0
+            ep_losses     = []
+            ep_reward_sum = 0.0
             prev_raw   = None
             state      = None
             action_idx = None
 
-            if episode % 500 == 0:
+            if episode % 1000 == 0:
                 save_checkpoint(episode, epsilon, f"models/dqn_{episode}.pt")
 
             if episode >= MAX_EPISODES:
                 save_checkpoint(episode, epsilon)
-                logger.info(f"Training complete | episodes: {episode} | ε: {epsilon:.4f}")
+                logger.info(f"Training complete | episodes: {episode} | epsilon: {epsilon:.4f}")
+                wandb.finish()
                 break
         
         # Step 6: If non-terminal state then choose next action and send to env

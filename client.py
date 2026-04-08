@@ -53,7 +53,7 @@ def send_seed(
         payload["fruit"] = fruit
     
     try:
-        logger.info(f"Sending seed: {GAME_SERVER_URL}seed")
+        # logger.info(f"Sending seed: {GAME_SERVER_URL}seed")
         resp = requests.post(f"{GAME_SERVER_URL}seed", json=payload, timeout=10)
         resp.raise_for_status()
         logger.info(f"Seed sent - payload: {payload} | response: {resp.status_code}")
@@ -69,7 +69,7 @@ def client_loop():
         action = action_queue.get()
 
         try:
-            logger.info(f"Sending action: {GAME_SERVER_URL}perform_action")
+            # logger.info(f"Sending action: {GAME_SERVER_URL}perform_action")
             resp = requests.post(f"{GAME_SERVER_URL}perform_action", json={"action": action}, timeout=10)
             resp.raise_for_status()
             logger.debug(f"Action '{action}' sent - response: {resp.status_code}")

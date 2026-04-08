@@ -65,10 +65,6 @@ def update_state(req: UpdateStateRequest):
     # Log current size of queue
     logger.debug(f"State pushed to queue — queue size: {state_queue.qsize()}")
 
-    # Log if game is over
-    if req.gameOver:
-        logger.info(f"Game over — final score: {req.score}")
-
     # Return response code to server
     return {"status": "ok"}
 
